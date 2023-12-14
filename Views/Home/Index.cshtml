@@ -1,0 +1,221 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div id="durum" style="display:none;"></div>
+<main class="content">
+    <div class="container p-0">
+        <h1 class="h3 mb-3">Messages</h1>
+        <div class="card">
+            <div class="row g-0">
+                <div class="col-12 col-lg-5 col-xl-3 border-right" id="clients">
+                    <div class="px-4 d-none d-md-block">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                            </div>
+                        </div>
+                    </div>
+                    <hr class="d-block d-lg-none mt-1 mb-0">
+                </div>
+                <div class="col-12 col-lg-7 col-xl-9">
+                    <div class="py-2 px-4 border-bottom d-none d-lg-block">
+                        <div class="d-flex align-items-center py-1">
+                            <div class="position-relative">
+                                <img src="https://thumbs.dreamstime.com/b/user-profile-icon-vector-avatar-person-picture-portrait-symbol-neutral-gender-silhouette-circle-button-photo-blank-272664038.jpg" class="rounded-circle mr-1" alt="Sharon Lessman" width="40" height="40">
+                            </div>
+                            <div class="flex-grow-1 pl-3">
+                                <strong id="userName"></strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="position-relative">
+                        <div class="chat-messages p-4" id="chat">
+                        </div>
+                    </div>
+                    <div class="flex-grow-0 py-3 px-4 border-top">
+                        <div class="input-group">
+                            <input id="txtMessage" type="text" class="form-control" placeholder="Mesajınızı Yazın...">
+                            <button id="btnGonder" class="btn btn-primary ml-2">Gönder</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+@* <div class="">
+    <div id="durum" style="display:none;"></div>
+   <input id="txtMessage" />
+   <button id="btnGonder">Gönder</button>
+
+    <ul id="chat">
+    </ul>
+
+    <div>
+        <ul id="clients"></ul>
+    </div>
+</div> *@
+
+
+@section Scripts {
+    <script>
+        const name = prompt("Ad : ");
+        if (name == null || name == "") { 
+            alert("Lütfen kullanıcı adınızı giriniz...")
+            window.location.href = window.location.href;
+        }
+        $("#userName").html(name);
+
+        //SignalR bağlantısı kurulumu
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl(`/myHub?UserName=${name}`)
+            //withAutomaticReconnect => eğerki bağlantı sağlandıktan sonra kopma durumu söz konusu olursa belirli periyotlarla bağlantı talebinde bulun. Öncelikle bağlantı kopar kopmaz 0. saniyede tekrar bağlanmayı deneyecek. Eğer sağlanmmazsa 2, yine sağlanmazsa 10 ve yine sağlanmazsa 30sn sonra toplamda 4'lü bir periyotla yine deneycektir. Eğer yine sağlanmazsa pes edecektir.(0-2-10-30 Default)
+            // .withAutomaticReconnect()
+            //İstersek bu deneme periyotlarını değiştirebiliriz.
+            .withAutomaticReconnect([1000, 1000, 2000])
+            .build();
+
+        //Eğer bağlantı hiç kurulmazsa sürekli bağlantıyı başlatacağı isteği atması için kendimiz asenkron ve recursive bir fonksiyon yazarız.
+
+        async function start() {
+            try {
+                await connection.start()
+            }
+            catch (err) {
+                setTimeout(() => start(), 2000);
+            }
+        }
+
+        start();
+
+   
+
+
+
+        //Bağlantı başladı
+        //Bu fonksiyona artık gerek kalmadı.
+        // connection.start();
+
+
+        const durum = $("#durum");
+
+        //fadeIn => Burada opacity'sini arttırarak gösterir.(Toplam 2 sn)
+        //setTimeut => 2 sn sonra göster
+        //fadeout => Burada opacity'sini azaltarak görünmez hale getirir.(Toplam 2 sn)
+        function animation() {
+            durum.fadeIn(2000, () => {
+                setTimeout(() => {
+                    durum.fadeOut(2000)
+                }, 2000);
+            })
+        }
+
+
+        //Yeniden bağlanma girişimlerini başlatmadan önce firlatılan/tetiklenen event'dir.
+        connection.onreconnecting(error => {
+            durum.css("background-color", "blue");
+            durum.css("color", "white");
+            durum.html("Bağlantı kuruluyor...");
+            animation();
+        });
+
+        //Yeniden bağlantı gerçekleştiğinde tetiklenir.
+        connection.onreconnected(connectionId => {
+            durum.css("background-color", "green");
+            durum.css("color", "white");
+            durum.html("Bağlantı kuruldu...");
+            animation();
+        });
+
+        //Yeniden bağlantı girişimlerinin sonuçsuz kaldığı durumlarda kullanılır.
+        connection.onclose(connectionId => {
+            durum.css("background-color", "red");
+            durum.css("color", "white");
+            durum.html("Bağlanılamadı...");
+            animation();
+        });
+
+        connection.on("userJoined", data => {
+            durum.css("background-color", "green");
+            durum.css("color", "white");
+            durum.html(`${data.userName} bağlandı...`);
+            animation();
+        })
+
+        connection.on("userLeaved", data => {
+            durum.css("background-color", "orange");
+            durum.css("color", "white");
+            durum.html(`${data.userName} ayrıldı...`)
+            animation();
+        })
+
+
+        connection.on("clients", clientsData => {
+                // console.log(clientsData);
+            let text = "";
+            $.each(clientsData, (index, item) => {
+                // text += `<li>${item}</li>`
+                text += `<a href="#" class="list-group-item list-group-item-action border-0">
+                                <div class="d-flex align-items-start">
+                                     <img src="https://thumbs.dreamstime.com/b/user-profile-icon-vector-avatar-person-picture-portrait-symbol-neutral-gender-silhouette-circle-button-photo-blank-272664038.jpg" class="rounded-circle mr-1" alt="Vanessa Tucker" width="40" height="40">
+                                    <div class="flex-grow-1 ml-3">
+                                        ${item.userName}
+                                        <div class="small"><span class="fas fa-circle chat-online"></span> Online</div>
+                                    </div>
+                                </div>
+                            </a>`
+            });
+            $("#clients").html(text);
+        })
+
+
+        $('#btnGonder').click(() => {
+            //Mesajı aldık
+            let message = $('#txtMessage').val();
+
+            //Fonksiyonu çağırıyoruz ve mesajı gönderiyoruz ve hatayı yakalıyoruz!
+            connection.invoke("SendMessageAsync", message, name)
+                .catch(error => console.log(`Mesaj Gönderilirken Hatqa Oluştu ${error}`));
+
+            console.log("deneme");
+            let text = "";
+            $('#txtMessage').val('');
+        });
+
+
+        connection.on("ReceiveMessage", function (message, name, connectionId) {
+            // $('#chat').append("<li>" + name + ": " + message + "</li>");
+            // console.log(connectionId);
+            // console.log(connection.connection.connectionId);
+            if (connection.connection.connectionId == connectionId) {
+                $('#chat').append(`<div class="chat-message-right pb-4">
+                                        <div>
+                                                    <img src="https://thumbs.dreamstime.com/b/user-profile-icon-vector-avatar-person-picture-portrait-symbol-neutral-gender-silhouette-circle-button-photo-blank-272664038.jpg" class="rounded-circle mr-1" alt="Chris Wood" width="40" height="40">
+                                            <div class="text-muted small text-nowrap mt-2">2:33 am</div>
+                                        </div>
+                                        <div class="flex-shrink-1 bg-light rounded py-2 px-3 mr-3">
+                                            <div class="font-weight-bold mb-1">You</div>
+                                                   ${message}
+                                        </div>
+                                    </div>`);
+            } else { 
+            $('#chat').append(` <div class="chat-message-left pb-4">
+                                                <div>
+                                                            <img src="https://thumbs.dreamstime.com/b/user-profile-icon-vector-avatar-person-picture-portrait-symbol-neutral-gender-silhouette-circle-button-photo-blank-272664038.jpg" class="rounded-circle mr-1" alt="Sharon Lessman" width="40" height="40">
+                                                </div>
+                                                <div class="flex-shrink-1 bg-light rounded py-2 px-3 ml-3">
+                                                    <div class="font-weight-bold mb-1">${name}</div>
+                                                    ${message}
+                                                </div>
+                                            </div>`);
+            }
+        })
+
+
+
+
+
+
+    </script>
+}
